@@ -32,9 +32,9 @@ class CreateReport:
         self.current_index+=1
         self.information.append(data)
 
-    def get_file_header_info(self, line):
-        empresa = line[72:102].strip()
-        inscricao = line[18:32].strip()
+    def assign_file_header_info(self, line):
+        empresa = line[rules.campos['empresa']].strip()
+        inscricao = line[rules.campos['inscricao']].strip()
         cnpj_formatado = "{0}.{1}.{2}/{3}-{4}".format(
             inscricao[:2],
             inscricao[2:5],
@@ -42,52 +42,56 @@ class CreateReport:
             inscricao[8:12],
             inscricao[12:]
         )
-        nome_banco = line[102:132].strip()
+        nome_banco = line[rules.campos['nome_banco']].strip()
 
         self.empresa = empresa
         self.inscricao = cnpj_formatado
         self.nome_banco = nome_banco
 
-    def get_batch_header_info(self, line):
-        nome_rua = line[142:172].strip()
-        numero_local = line[172:177].strip()
-        nome_cidade = line[192:212].strip()
+    def assign_batch_header_info(self, line):
+        nome_rua = line[rules.campos['nome_rua']].strip()
+        numero_local = line[rules.campos['numero_local']].strip()
+        nome_cidade = line[rules.campos['nome_cidade']].strip()
         
-        cep_inicial = line[212:217].strip()
-        cep_complemento = line[217:220].strip()
+        cep_inicial = line[rules.campos['cep_inicial']].strip()
+        cep_complemento = line[rules.campos['cep_complemento']].strip()
         cep = f"{cep_inicial}-{cep_complemento}"
 
-        sigla_estado = line[220:222].strip()
+        sigla_estado = line[rules.campos['sigla_estado']].strip()
         
-        index_forma_lancamento = int(line[11:13].strip()) -1
+        index_forma_lancamento = int(line[rules.campos['index_forma_lancamento']].strip()) -1
         forma_lancamento = rules.forma_lancamento[index_forma_lancamento]
                 
-
         self.create_new_object()
 
         print(self.empresa)
 
-        self.information[self.current_index]['header']["empresa"] = self.empresa
-        self.information[self.current_index]['header']["inscricao"] = self.inscricao
-        self.information[self.current_index]['header']["nome_banco"] = self.nome_banco
-        self.information[self.current_index]['header']["nome_rua"] = nome_rua
-        self.information[self.current_index]['header']["numero_local"] = numero_local
-        self.information[self.current_index]['header']["nome_cidade"] = nome_cidade
-        self.information[self.current_index]['header']["cep"] = cep
-        self.information[self.current_index]['header']["sigla_estado"] = sigla_estado
+        header_info = {
+            "empresa": self.empresa,
+            "inscricao": self.inscricao,
+            "nome_banco": self.nome_banco,
+            "nome_rua": nome_rua,
+            "numero_local": numero_local,
+            "nome_cidade": nome_cidade,
+            "cep": cep,
+            "sigla_estado": sigla_estado
+        }
+
+        self.information[self.current_index]['header'].update(header_info)
         self.forma_lancamento = forma_lancamento
 
-    def get_details_info(self, line):
-        nome_favorecido = line[43:73].strip()
+
+    def assign_details_info(self, line):
+        nome_favorecido = line[rules.campos['nome_favorecido']].strip()
         
-        date = line[93:101].strip()
+        date = line[rules.campos['date']].strip()
         data_pagamento = datetime.strptime(date, "%d%m%Y").strftime("%d/%m/%Y")
         
-        valor_original = line[119:134].strip()
+        valor_original = line[rules.campos['valor_original']].strip()
         valor_reais = locale.format_string('%0.2f', int(valor_original) / 100, grouping=True)
         valor_pagamento = f'R$ {valor_reais}'
 
-        numero_documento_atribuido_empresa = line[73:93].strip()
+        numero_documento_atribuido_empresa = line[rules.campos['numero_documento_atribuido_empresa']].strip()
 
         forma_lancamento = self.forma_lancamento
 
@@ -101,28 +105,26 @@ class CreateReport:
         
         self.information[self.current_index]["details"].append(data)
 
-    def get_batch_trailer_info(self, line):
-        print('this is a trailer')
+    def assign_batch_trailer_info(self, line):
+        pass
 
-    def get_file_trailer_info(self, line):
-        print('this is a file trailer')
+    def assign_file_trailer_info(self, line):
+        pass
 
     def main(self):
         try:
             with open(self.nome_arquivo, 'r', encoding='utf-8') as file:
+                register_handlers = {
+                    0: self.assign_file_header_info,
+                    1: self.assign_batch_header_info,
+                    3: self.assign_details_info,
+                    5: self.assign_batch_trailer_info,
+                    9: self.assign_file_trailer_info,
+                }
                 for line in file:
                     register_type = int(line[rules.campos['tipo_registro']])
-                    if register_type == 0:
-                        self.get_file_header_info(line)
-                    elif register_type == 1:
-                        print(line) 
-                        self.get_batch_header_info(line)
-                    elif register_type == 3:
-                        self.get_details_info(line)
-                    elif register_type == 5:
-                        self.get_batch_trailer_info(line)
-                    elif register_type == 9:
-                        self.get_file_trailer_info(line)
+                    if register_type in register_handlers:
+                        register_handlers[register_type](line)
 
             GenerateOutput.parseCSV(self.information)
         except FileNotFoundError:
