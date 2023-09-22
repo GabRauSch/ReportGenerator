@@ -15,7 +15,6 @@ class CreateReport:
         self.forma_lancamento = ''
 
     def create_new_object(self):
-        print("porq esse demonho ta sendo execurdp ´prraqeopjasdfjklhs")
         data = {
                 "header": {
                     "empresa": "",
